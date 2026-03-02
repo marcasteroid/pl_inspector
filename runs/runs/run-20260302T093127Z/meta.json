@@ -1,0 +1,10 @@
+{
+  "run_id": "run-20260302T093127Z",
+  "created_at": "2026-03-02T09:31:27.314530+00:00",
+  "pl_version": null,
+  "device_name": "default.qubit",
+  "device_wires": "Wires([0])",
+  "description": "watch() session for <QNode: device='<default.qubit device (wires=1) at 0x1047bd850>', interface='auto', diff_method='best', shots='Shots(total=None)'>",
+  "tags": [],
+  "extra": {}
+}
