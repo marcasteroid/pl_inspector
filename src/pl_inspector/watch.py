@@ -20,15 +20,14 @@ Example
         return qml.expval(qml.PauliZ(0))
 
     with watch(circuit, save_dir="./runs", capture="tracker") as run:
-        y = run.wrapped_qnode(0.1)
-        y = run.wrapped_qnode(0.2)
+        y1 = run(0.1)          # calls the wrapped QNode
+        y2 = run(0.2)
         run.show_trace()
         run_dir = run.export_json()
 
-The original QNode is *not* modified in-place; instead, the session exposes a
-``wrapped_qnode`` attribute that should be used within the context. This keeps
-the implementation simple and avoids subtle interactions with PennyLane's
-internal caching.
+The original QNode is *not* modified in-place; instead, the session behaves
+like the wrapped QNode (it is callable) and also exposes the underlying
+``wrapped_qnode`` attribute for users who prefer that style.
 """
 
 from __future__ import annotations
@@ -47,9 +46,13 @@ from .utils import JSONValue, ensure_dir, generate_run_id, to_json_compatible
 class WatchSession:
     """Context-managed run/session object returned by :func:`watch`.
 
-    Users should call ``run.wrapped_qnode`` inside the context rather than the
-    original QNode variable. This keeps the public API explicit and makes it
-    clear when tracing is active.
+    Instances of :class:`WatchSession` are themselves callable and delegate
+    calls to the wrapped QNode, making this pattern convenient:
+
+    .. code-block:: python
+
+        with watch(circuit) as run:
+            y = run(0.5)
     """
 
     def __init__(
@@ -123,6 +126,21 @@ class WatchSession:
         )
 
         return self
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Invoke the wrapped QNode directly via the session object.
+
+        This preserves a pleasant API where users can write ``run(x)`` inside
+        the context block, while still allowing access to ``wrapped_qnode`` if
+        they need the underlying callable explicitly.
+        """
+
+        if self.wrapped_qnode is None:
+            raise RuntimeError(
+                "WatchSession is not initialised. "
+                "Use it as a context manager: 'with watch(qnode) as run: ...'."
+            )
+        return self.wrapped_qnode(*args, **kwargs)
 
     def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
         """Tear down tracking and write a final summary."""
