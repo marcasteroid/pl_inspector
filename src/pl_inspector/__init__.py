@@ -20,6 +20,7 @@ from .models import (
     TrackerRecord,
     TrainingStepRecord,
 )
+from .watch import watch
 
 __all__ = [
     "RunMeta",
@@ -28,6 +29,7 @@ __all__ = [
     "SnapshotRecord",
     "TrainingStepRecord",
     "PLInspectorError",
+    "watch",
 ]
 
 __version__ = "0.1.0"

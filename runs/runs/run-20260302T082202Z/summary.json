@@ -1,0 +1,69 @@
+{
+  "run_id": "run-20260302T082202Z",
+  "num_events": 0,
+  "tracker": {
+    "run_id": "run-20260302T082202Z",
+    "step_index": null,
+    "timestamp": "2026-03-02T08:22:02.023079+00:00",
+    "metrics": {
+      "tracking_available": true,
+      "latest": {
+        "simulations": 1,
+        "executions": 1,
+        "results": 0.9950041652780258,
+        "resources": {
+          "gate_types": {
+            "RX": 1
+          },
+          "gate_sizes": {
+            "1": 1
+          },
+          "measurements": {
+            "expval(PauliZ)": 1
+          },
+          "num_allocs": 1,
+          "depth": 1
+        },
+        "errors": {}
+      },
+      "totals": {
+        "batches": 1,
+        "simulations": 1,
+        "executions": 1,
+        "results": 0.9950041652780258
+      }
+    },
+    "raw_history": {
+      "batches": [
+        1
+      ],
+      "simulations": [
+        1
+      ],
+      "executions": [
+        1
+      ],
+      "results": [
+        0.9950041652780258
+      ],
+      "resources": [
+        {
+          "gate_types": {
+            "RX": 1
+          },
+          "gate_sizes": {
+            "1": 1
+          },
+          "measurements": {
+            "expval(PauliZ)": 1
+          },
+          "num_allocs": 1,
+          "depth": 1
+        }
+      ],
+      "errors": [
+        {}
+      ]
+    }
+  }
+}

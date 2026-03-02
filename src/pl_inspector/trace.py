@@ -84,14 +84,16 @@ def _extract_device_info(qnode: Any) -> Dict[str, JSONValue]:
     total_shots: Optional[int] = None
     if shots is not None:
         if hasattr(shots, "total_shots"):
-            # PennyLane Shots object
-            total_shots = int(getattr(shots, "total_shots"))
+            # PennyLane Shots object – its ``total_shots`` may itself be None.
+            raw_total = getattr(shots, "total_shots")
+            if isinstance(raw_total, int):
+                total_shots = raw_total
         elif isinstance(shots, int):
             total_shots = shots
         else:
             # Last resort: try to coerce to int, otherwise fall back to string.
             try:
-                total_shots = int(shots)
+                total_shots = int(shots)  # type: ignore[arg-type]
             except Exception:  # noqa: BLE001
                 pass
 
