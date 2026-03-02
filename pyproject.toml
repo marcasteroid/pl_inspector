@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pl-inspector"
+version = "0.1.0"
+description = "Lightweight observability toolkit for PennyLane (work in progress)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Marco", email = "example@example.com" }
+]
+keywords = ["pennylane", "quantum", "observability", "tracing"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+  "pennylane",
+  "numpy",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+torch = [
+  "torch",
+]
+
+[project.urls]
+Homepage = "https://github.com/example/pl-inspector"
+Repository = "https://github.com/example/pl-inspector"
+Issues = "https://github.com/example/pl-inspector/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
