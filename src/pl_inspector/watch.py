@@ -28,19 +28,31 @@ Example
 The original QNode is *not* modified in-place; instead, the session behaves
 like the wrapped QNode (it is callable) and also exposes the underlying
 ``wrapped_qnode`` attribute for users who prefer that style.
+
+Snapshot capture
+----------------
+
+If you pass ``capture="snapshots"``, pl-inspector will **not** inject snapshots
+into your circuit. Instead, it will try to **parse snapshot payloads that your
+QNode already returns** (for example via PennyLane's snapshot-enabled
+execution). If no snapshot payload is present in an output, the session will
+record that fact and continue.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+
+import numpy as np
 
 from .models import ExecutionEvent, RunMeta, TrackerRecord
+from .models import SnapshotRecord
+from .snapshots import make_snapshot_record
 from .storage import RunStorage
 from .trace import QNodeTraceWrapper, wrap_qnode
 from .tracker import TrackerAdapter
-from .utils import JSONValue, ensure_dir, generate_run_id, to_json_compatible
+from .utils import ensure_dir, generate_run_id
 
 
 class WatchSession:
@@ -74,6 +86,10 @@ class WatchSession:
         self._events: List[ExecutionEvent] = []
         self._tracker_adapter: Optional[TrackerAdapter] = None
         self._tracker_record: Optional[TrackerRecord] = None
+        self._snapshot_records: List[SnapshotRecord] = []
+        self._snapshot_calls_with_payload: int = 0
+        self._snapshot_calls_without_payload: int = 0
+        self._snapshot_arrays_saved: int = 0
         self._summary_written: bool = False
 
     # ------------------------------------------------------------------
@@ -114,13 +130,68 @@ class WatchSession:
             self._tracker_adapter.__enter__()
 
         # Prepare the wrapped QNode with an event callback that both records
-        # events in memory and appends them to storage.
+        # events in memory and appends them to storage. For snapshot capture,
+        # we additionally parse the *returned* output for snapshot payloads.
+
+        captured_outputs: List[Any] = []
+
+        class _OutputCapturingCallable:
+            """Proxy callable that captures outputs in call order.
+
+            This is used for ``capture="snapshots"`` so we can parse the raw
+            output alongside the generated :class:`ExecutionEvent` without
+            modifying PennyLane internals.
+            """
+
+            def __init__(self, inner: Callable[..., Any]) -> None:
+                self._inner = inner
+                self.device = getattr(inner, "device", None)
+                self.shots = getattr(inner, "shots", None)
+                self.__name__ = getattr(inner, "__name__", inner.__class__.__name__)
+
+            def __call__(self, *a: Any, **kw: Any) -> Any:
+                out = self._inner(*a, **kw)
+                captured_outputs.append(out)
+                return out
+
+        qnode_for_wrap: Callable[..., Any]
+        if self._capture == "snapshots":
+            qnode_for_wrap = _OutputCapturingCallable(self._original_qnode)
+        else:
+            qnode_for_wrap = self._original_qnode
+
         def on_event(ev: ExecutionEvent) -> None:
+            # Attach snapshot parsing results (if requested) before persisting.
+            if self._capture == "snapshots":
+                raw_out: Any = captured_outputs.pop(0) if captured_outputs else None
+                snapshots_payload = _extract_snapshot_payload(raw_out)
+                if snapshots_payload is None:
+                    self._snapshot_calls_without_payload += 1
+                    ev.details["snapshots"] = {"found": False}
+                else:
+                    self._snapshot_calls_with_payload += 1
+                    records, arrays_to_save = _snapshot_payload_to_records(
+                        run_id=self.run_id,
+                        call_index=ev.event_index,
+                        payload=snapshots_payload,
+                    )
+                    self._snapshot_records.extend(records)
+
+                    if arrays_to_save:
+                        self.storage.save_snapshots(arrays_to_save, append=True)
+                        self._snapshot_arrays_saved += len(arrays_to_save)
+
+                    ev.details["snapshots"] = {
+                        "found": True,
+                        "num_entries": len(records),
+                        "saved_arrays": len(arrays_to_save),
+                    }
+
             self._events.append(ev)
             self.storage.append_event(ev)
 
         self.wrapped_qnode = wrap_qnode(
-            self._original_qnode,
+            qnode_for_wrap,
             run_id=self.run_id,
             on_event=on_event,
         )
@@ -209,6 +280,18 @@ class WatchSession:
         if self._tracker_record is not None:
             summary["tracker"] = self._tracker_record.to_json_dict()
 
+        if self._capture == "snapshots":
+            # Minimal snapshot summary (records already contain compact summaries).
+            summary["snapshots"] = {
+                "enabled": True,
+                "calls_with_payload": self._snapshot_calls_with_payload,
+                "calls_without_payload": self._snapshot_calls_without_payload,
+                "num_records": len(self._snapshot_records),
+                "arrays_saved": self._snapshot_arrays_saved,
+                # Keep this bounded to avoid huge summary files.
+                "records_preview": [r.to_json_dict() for r in self._snapshot_records[:50]],
+            }
+
         # storage.write_summary will convert the mapping to JSON-safe values.
         self.storage.write_summary(summary)
         self._summary_written = True
@@ -231,11 +314,89 @@ def watch(
         Base directory under which run data will be stored. A subdirectory
         structure is created by :class:`pl_inspector.storage.RunStorage`.
     capture:
-        Optional capture mode. Currently ``"tracker"`` enables
-        :class:`pennylane.Tracker` integration; other values are ignored for
-        now.
+        Optional capture mode:
+
+        - ``"tracker"``: best-effort capture of :class:`pennylane.Tracker` data.
+        - ``"snapshots"``: parse snapshot payloads already returned by the QNode.
+
+        In snapshot mode, pl-inspector does not insert snapshots into user
+        circuits; it only parses and persists snapshot-capable outputs.
     """
 
     return WatchSession(qnode, save_dir=save_dir, capture=capture)
+
+
+def _extract_snapshot_payload(output: Any) -> Optional[Mapping[str, Any]]:
+    """Best-effort extraction of a snapshot payload from a QNode output.
+
+    This function intentionally uses conservative heuristics. If no snapshot
+    payload is detected, it returns ``None``.
+    """
+
+    if output is None:
+        return None
+
+    # Common pattern: (result, snapshots_dict)
+    if isinstance(output, (tuple, list)) and len(output) >= 2:
+        maybe_payload = output[-1]
+        if isinstance(maybe_payload, Mapping):
+            return maybe_payload
+
+    # Pattern: {"result": ..., "snapshots": {...}}
+    if isinstance(output, Mapping) and "snapshots" in output:
+        maybe_payload = output.get("snapshots")
+        if isinstance(maybe_payload, Mapping):
+            return maybe_payload
+
+    # Some objects may expose a `.snapshots` attribute.
+    maybe_attr = getattr(output, "snapshots", None)
+    if isinstance(maybe_attr, Mapping):
+        return maybe_attr
+
+    # Last resort: if it's a mapping and keys look snapshot-ish, treat it as payload.
+    if isinstance(output, Mapping):
+        keys = list(output.keys())
+        key_hint = any(
+            isinstance(k, str) and ("snap" in k.lower() or "snapshot" in k.lower()) for k in keys
+        )
+        if key_hint:
+            return output  # type: ignore[return-value]
+
+    return None
+
+
+def _snapshot_payload_to_records(
+    *,
+    run_id: str,
+    call_index: int,
+    payload: Mapping[str, Any],
+) -> Tuple[List[SnapshotRecord], Dict[str, np.ndarray]]:
+    """Convert a snapshot payload mapping into records and arrays to persist."""
+
+    records: List[SnapshotRecord] = []
+    arrays_to_save: Dict[str, np.ndarray] = {}
+
+    for label, data in payload.items():
+        label_str = str(label)
+        record = make_snapshot_record(
+            run_id=run_id,
+            label=label_str,
+            data=data,
+            metadata={"call_index": call_index},
+        )
+        records.append(record)
+
+        # Persist array-like payloads into snapshots.npz when safe.
+        try:
+            arr = data if isinstance(data, np.ndarray) else np.asanyarray(data)
+        except Exception:  # noqa: BLE001
+            continue
+
+        # Avoid persisting object arrays (which imply pickling on load).
+        if isinstance(arr, np.ndarray) and arr.dtype != object:
+            key = f"call{call_index}_{label_str}"
+            arrays_to_save[key] = arr
+
+    return records, arrays_to_save
 
 
