@@ -68,7 +68,9 @@ def test_make_snapshot_record():
     assert record.run_id == "test_run"
     assert record.label == "my_snapshot"
     assert record.data_summary.get("type") == "state_vector"
-    assert record.metadata.get("step") == 5
+    metadata_step = record.metadata.get("step")
+    assert isinstance(metadata_step, dict)
+    assert metadata_step.get("value") == 5
 
 
 def test_extract_snapshot_payload():
