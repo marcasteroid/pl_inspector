@@ -10,7 +10,7 @@ Working with parameterized quantum circuits often means crossing the boundary be
 
 ## Why Built-in PennyLane Debugging Is Not Enough
 
-PennyLane's `qml.Tracker` and `qml.snapshots` are brilliant for immediate, interactive inspection. However, for persistent observability:
+PennyLane's `qml.Tracker` and `qml.snapshots` are suitable only for immediate, interactive inspection. However, for persistent observability:
 
 1. **Ephemeral by default**: Data lives in memory and vanishes as soon as the kernel restarts or the script finishes.
 2. **Complex payload extraction**: Parsing snapshot objects (which might contain massive state vectors) requires custom summarization logic to prevent memory bloat or unwieldy output logs.
@@ -32,7 +32,7 @@ _pl-inspector_ requires Python 3.8+ and PennyLane. PyTorch is required if utiliz
 
 ```bash
 # Clone the repository and install it locally
-git clone https://github.com/your-org/pl-inspector.git
+git clone https://github.com/marcasteroid/pl-inspector.git
 cd pl-inspector
 pip install -e .
 ```
@@ -127,6 +127,10 @@ pip install pytest
 # Run the test suite
 python -m pytest tests/
 ```
+
+## License
+
+This project is licensed under the MIT License. Copyright (c) 2026 Marco Margarucci.
 
 ---
 
