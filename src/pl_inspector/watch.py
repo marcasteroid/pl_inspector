@@ -258,6 +258,73 @@ class WatchSession:
         self._write_summary_if_needed()
         return self.storage.run_dir
 
+    def plot_probabilities(self, ax: Optional[Any] = None) -> Any:
+        """Plot a probability bar chart from the latest snapshot data.
+        
+        Args:
+            ax: Optional matplotlib Axes object to plot on.
+            
+        Returns:
+            The matplotlib Axes object containing the plot.
+        """
+        if not self._snapshot_records:
+            raise RuntimeError(
+                "No snapshot data available to plot. "
+                "Ensure the session was run with capture='snapshots'."
+            )
+            
+        from .plotting import plot_probability_bar_chart
+        import numpy as np
+        
+        npz_path = self.storage.run_dir / "snapshots.npz"
+        if not npz_path.exists():
+            raise RuntimeError("Snapshot array data not found on disk.")
+            
+        with np.load(npz_path, allow_pickle=False) as data:
+            keys = sorted(data.files, key=lambda x: int(x.split('_')[0][4:]))
+            if not keys:
+                raise RuntimeError("No snapshot arrays found to plot.")
+            
+            prob_keys = [k for k in keys if "prob" in k.lower()]
+            target_key = prob_keys[-1] if prob_keys else keys[-1]
+            probs = data[target_key]
+            
+        return plot_probability_bar_chart(probs, ax=ax)
+
+    def plot_top_amplitudes(self, top_k: int = 8, ax: Optional[Any] = None) -> Any:
+        """Plot a bar chart of the top-k amplitude magnitudes from the latest snapshot data.
+        
+        Args:
+            top_k: The number of highest amplitudes to display.
+            ax: Optional matplotlib Axes object to plot on.
+            
+        Returns:
+            The matplotlib Axes object containing the plot.
+        """
+        if not self._snapshot_records:
+            raise RuntimeError(
+                "No snapshot data available to plot. "
+                "Ensure the session was run with capture='snapshots'."
+            )
+            
+        from .plotting import plot_top_amplitude_magnitudes
+        import numpy as np
+        
+        npz_path = self.storage.run_dir / "snapshots.npz"
+        if not npz_path.exists():
+            raise RuntimeError("Snapshot array data not found on disk.")
+            
+        with np.load(npz_path, allow_pickle=False) as data:
+            keys = sorted(data.files, key=lambda x: int(x.split('_')[0][4:]))
+            if not keys:
+                raise RuntimeError("No snapshot arrays found to plot.")
+            
+            amp_keys = [k for k in keys if "amp" in k.lower() or "state" in k.lower()]
+            target_key = amp_keys[-1] if amp_keys else keys[-1]
+            amplitudes = data[target_key]
+            
+        return plot_top_amplitude_magnitudes(amplitudes, top_k=top_k, ax=ax)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
