@@ -21,6 +21,7 @@ from .models import (
     TrainingStepRecord,
 )
 from .watch import watch
+from .training import trace_training
 
 __all__ = [
     "RunMeta",
@@ -30,6 +31,7 @@ __all__ = [
     "TrainingStepRecord",
     "PLInspectorError",
     "watch",
+    "trace_training",
 ]
 
 __version__ = "0.1.0"
