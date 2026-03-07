@@ -6,33 +6,18 @@ This package provides observability tooling for PennyLane, including:
 - snapshot-based intermediate-state capture,
 - Torch-focused training diagnostics.
 
-At this stage, only the foundational datamodels and base error type are
-considered part of the (still experimental) public surface.
+The public surface area is intentionally small and focused on high-level
+session managers.
 """
 
 from __future__ import annotations
 
-from .exceptions import PLInspectorError
-from .models import (
-    ExecutionEvent,
-    RunMeta,
-    SnapshotRecord,
-    TrackerRecord,
-    TrainingStepRecord,
-)
-from .watch import watch
 from .training import trace_training
+from .watch import watch
 
 __all__ = [
-    "RunMeta",
-    "ExecutionEvent",
-    "TrackerRecord",
-    "SnapshotRecord",
-    "TrainingStepRecord",
-    "PLInspectorError",
     "watch",
     "trace_training",
 ]
 
 __version__ = "0.1.0"
-

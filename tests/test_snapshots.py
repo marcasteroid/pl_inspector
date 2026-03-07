@@ -103,7 +103,9 @@ def test_watch_session_snapshot_capture(tmp_path):
     with watch(mock_qnode, save_dir=tmp_path, capture="snapshots") as run:
         result = run()
         
-    assert result == (0.0, {"psi": run._snapshot_records[0].data_summary if not run._snapshot_records else run._snapshot_records[0].data_summary}) # Actually result is unchanged.
+    # Ensure that the original QNode return values are securely untouched
+    assert result[0] == 0.0
+    assert np.allclose(result[1]["psi"], np.array([np.sqrt(0.5), np.sqrt(0.5), 0.0, 0.0]))
     
     assert run._snapshot_calls_with_payload == 1
     assert len(run._snapshot_records) == 1
