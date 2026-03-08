@@ -69,6 +69,9 @@ DASHBOARD_CSS = """
                 border-radius: 4px; padding: 6px 10px; font-size: 0.88em; }
 #sidebar { min-width: 240px; max-width: 280px; }
 .tab-content { padding-top: 8px; }
+.metric-card { background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #e9ecef; text-align: center; }
+.metric-value { font-size: 1.4em; font-weight: bold; color: #2d3748; }
+.metric-label { font-size: 0.85em; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; }
 """
 
 # ---------------------------------------------------------------------------
@@ -204,9 +207,9 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
                 gr.Markdown("### 📁 Run Selection")
 
                 inp_dir = gr.Textbox(
-                    label="Base directory",
+                    label="Data Root Directory",
                     value=default_runs_dir,
-                    placeholder="Path containing runs/",
+                    placeholder="e.g., ./demo_runs",
                     lines=1,
                     elem_id="inp_dir",
                 )
@@ -223,7 +226,7 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
                     allow_custom_value=False,
                     elem_id="dd_run_a",
                 )
-                btn_load_a = gr.Button("▶ Load A", variant="primary", size="sm")
+                btn_load_a = gr.Button("▶ Load Run A", variant="primary", size="sm", interactive=False)
 
                 gr.Markdown("---")
                 gr.Markdown("#### 🟠 Run B")
@@ -234,7 +237,7 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
                     allow_custom_value=False,
                     elem_id="dd_run_b",
                 )
-                btn_load_b = gr.Button("▶ Load B", variant="secondary", size="sm")
+                btn_load_b = gr.Button("▶ Load Run B", variant="secondary", size="sm", interactive=False)
 
             # ================================================================
             # MAIN PANEL
@@ -252,27 +255,42 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
                     # TAB 1: OVERVIEW
                     # ========================================================
                     with gr.TabItem("📋 Overview"):
-                        with gr.Row():
-                            with gr.Column():
-                                gr.Markdown("#### meta.json")
-                                json_meta = gr.JSON(label="meta.json", value=None)
-                            with gr.Column():
-                                gr.Markdown("#### summary.json")
-                                json_summary = gr.JSON(label="summary.json", value=None)
-
                         md_overview_hint = gr.Markdown(
                             _NO_RUN_SELECTED, visible=True, elem_id="overview_hint"
                         )
                         
-                        btn_export_a = gr.Button("📄 Export Report", variant="secondary", size="sm")
-                        md_export_status_a = gr.Markdown("")
+                        with gr.Column(visible=False) as col_overview:
+                            with gr.Row():
+                                with gr.Column(elem_classes="metric-card"):
+                                    gr.Markdown("<div class='metric-label'>Total Calls</div>", elem_id="m_label_calls")
+                                    val_total_calls = gr.Markdown("<div class='metric-value'>-</div>", elem_id="m_val_calls")
+                                with gr.Column(elem_classes="metric-card"):
+                                    gr.Markdown("<div class='metric-label'>Total Steps</div>", elem_id="m_label_steps")
+                                    val_total_steps = gr.Markdown("<div class='metric-value'>-</div>", elem_id="m_val_steps")
+                                with gr.Column(elem_classes="metric-card"):
+                                    gr.Markdown("<div class='metric-label'>Final Loss</div>", elem_id="m_label_loss")
+                                    val_final_loss = gr.Markdown("<div class='metric-value'>-</div>", elem_id="m_val_loss")
+                                with gr.Column(elem_classes="metric-card"):
+                                    gr.Markdown("<div class='metric-label'>Duration</div>", elem_id="m_label_duration")
+                                    val_duration = gr.Markdown("<div class='metric-value'>-</div>", elem_id="m_val_duration")
+
+                            with gr.Accordion("Raw Metadata (JSON Explorer)", open=False):
+                                with gr.Row():
+                                    with gr.Column():
+                                        json_meta = gr.JSON(label="meta.json", value=None)
+                                    with gr.Column():
+                                        json_summary = gr.JSON(label="summary.json", value=None)
+                            
+                            btn_export_a = gr.Button("📄 Export Report", variant="secondary", size="sm")
+                            md_export_status_a = gr.Markdown("")
 
                     # ========================================================
                     # TAB 2: EVENTS
                     # ========================================================
                     with gr.TabItem("⚡ Events"):
                         md_events_empty = gr.Markdown(
-                            "No events loaded.", visible=True
+                            "No execution events found. Ensure `pl_inspector.watch()` was used during the run.",
+                            visible=True
                         )
                         with gr.Column(visible=False) as col_events:
                             with gr.Row():
@@ -299,7 +317,8 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
                     # ========================================================
                     with gr.TabItem("📈 Training"):
                         md_training_empty = gr.Markdown(
-                            "No gradient records loaded.", visible=True
+                            "No gradient records found. This occurs if training wasn't traced with `pl_inspector.trace_training()`.",
+                            visible=True
                         )
                         with gr.Column(visible=False) as col_training:
                             with gr.Row():
@@ -395,6 +414,9 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
             outputs=[dd_run_b],
         )
 
+        dd_run_a.change(fn=lambda v: gr.update(interactive=bool(v)), inputs=[dd_run_a], outputs=[btn_load_a])
+        dd_run_b.change(fn=lambda v: gr.update(interactive=bool(v)), inputs=[dd_run_b], outputs=[btn_load_b])
+
         # ---- load a run ---------------------------------------------------
         def _cb_load_run(base_dir: str, run_id: Optional[str], is_primary: bool = True):
             """Load a run and return update values for state and UI."""
@@ -403,7 +425,11 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
             acc_open, acc_vis, warn_text = False, False, ""
 
             # UI components (only updated if is_primary)
-            o_ui = [None, None, gr.update(visible=True)] # meta, sum, hint
+            o_ui = [gr.update(visible=False), gr.update(visible=True), # col_overview, hint
+                    "-", "-", "-", "-", # metric values
+                    None, None, # JSONs
+                    gr.update(interactive=False)] # export button
+            
             ev_ui = [gr.update(visible=True), gr.update(visible=False),
                      None, "All", None, None, None] # empty_vis, col_vis, summary, filter, counts_plot, timing_plot, df
             tr_ui = [gr.update(visible=True), gr.update(visible=False), None, None, None] # empty_vis, col_vis, loss, gnorm, df
@@ -441,8 +467,28 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
             if warn_text:
                 acc_vis, acc_open = True, True
 
-            # --- overview ---
-            o_ui = [run.meta, run.summary, gr.update(visible=False)]
+            # --- overview stats ---
+            v_calls = str(run.summary.get("total_calls", "-"))
+            v_steps = str(run.summary.get("total_steps", "-"))
+            v_loss = "-"
+            if run.summary.get("final_loss") is not None:
+                v_loss = f"{run.summary['final_loss']:.4f}"
+            v_dur = "-"
+            if run.summary.get("total_duration_ms") is not None:
+                v_dur = f"{run.summary['total_duration_ms']/1000:.2f}s"
+            elif run.events:
+                 durs = [e.get("details", {}).get("duration_ms", 0) for e in run.events]
+                 v_dur = f"{sum(durs)/1000:.2f}s"
+
+            m_calls = f"<div class='metric-value'>{v_calls}</div>"
+            m_steps = f"<div class='metric-value'>{v_steps}</div>"
+            m_loss = f"<div class='metric-value'>{v_loss}</div>"
+            m_dur = f"<div class='metric-value'>{v_dur}</div>"
+
+            o_ui = [gr.update(visible=True), gr.update(visible=False),
+                    m_calls, m_steps, m_loss, m_dur,
+                    run.meta, run.summary,
+                    gr.update(interactive=True)]
 
             # --- events ---
             if run.has_events:
@@ -526,7 +572,10 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
             _state_meta_a, _state_summary_a, _state_events_a, _state_gradients_a,
             _state_snap_keys_a, _state_snap_path_a,
             acc_warnings, acc_warnings, md_warnings,
-            json_meta, json_summary, md_overview_hint,
+            col_overview, md_overview_hint,
+            val_total_calls, val_total_steps, val_final_loss, val_duration,
+            json_meta, json_summary,
+            btn_export_a,
             md_events_empty, col_events, md_event_summary, dd_event_filter, plot_event_counts, plot_timing, df_events,
             md_training_empty, col_training, plot_loss, plot_gnorm, df_grads,
             md_snap_empty, col_snapshots, dd_snap_key, plot_snap_dist, plot_snap_amp,
@@ -535,9 +584,13 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
         _load_outputs_b = [
             _state_meta_b, _state_summary_b, _state_events_b, _state_gradients_b,
             _state_snap_keys_b, _state_snap_path_b,
-            # Gradio requires the same number of outputs.
             acc_warnings, acc_warnings, md_warnings,
-            json_meta, json_summary, md_overview_hint,
+            col_overview, md_overview_hint,
+            val_total_calls, val_total_steps, val_final_loss, val_duration,
+            json_meta, json_summary,
+            btn_export_a, # We still update Run A UI even if loading into B? 
+                          # Actually _cb_load_run returns defaults for UI if is_primary=False.
+                          # But Gradio requires mapping.
             md_events_empty, col_events, md_event_summary, dd_event_filter, plot_event_counts, plot_timing, df_events,
             md_training_empty, col_training, plot_loss, plot_gnorm, df_grads,
             md_snap_empty, col_snapshots, dd_snap_key, plot_snap_dist, plot_snap_amp,
@@ -680,6 +733,7 @@ def build_app(default_runs_dir: str = DEFAULT_RUNS_DIR) -> "gr.Blocks":  # noqa:
 def launch(
     *,
     runs_dir: str | Path = DEFAULT_RUNS_DIR,
+    host: str = "127.0.0.1",
     port: int = DEFAULT_PORT,
     share: bool = False,
     open_browser: bool = True,
@@ -690,6 +744,8 @@ def launch(
     ----------
     runs_dir:
         Root directory containing the ``runs/`` sub-directory.
+    host:
+        Local Gradio server host (default: "127.0.0.1").
     port:
         Local Gradio server port.
     share:
@@ -701,6 +757,7 @@ def launch(
     runs_dir = str(Path(runs_dir).expanduser())
     app = build_app(default_runs_dir=runs_dir)
     app.launch(
+        server_name=host,
         server_port=port,
         share=share,
         inbrowser=open_browser,
@@ -724,6 +781,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RUNS_DIR,
         metavar="DIR",
         help=f"Root directory containing the runs/ sub-directory (default: {DEFAULT_RUNS_DIR!r}).",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Local Gradio server host (default: '127.0.0.1').",
     )
     parser.add_argument(
         "--port",
@@ -752,6 +814,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     launch(
         runs_dir=args.runs_dir,
+        host=args.host,
         port=args.port,
         share=args.share,
         open_browser=not args.no_browser,

@@ -36,6 +36,9 @@ torch = [
   "torch",
 ]
 
+[project.scripts]
+pl-inspector-dashboard = "pl_inspector.ui.app:main"
+
 [project.urls]
 Homepage = "https://github.com/example/pl-inspector"
 Repository = "https://github.com/example/pl-inspector"

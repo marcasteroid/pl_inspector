@@ -19,6 +19,7 @@ from .watch import watch
 
 def launch_dashboard(
     runs_dir: str = "./runs",
+    host: str = "127.0.0.1",
     port: int = 7860,
     *,
     share: bool = False,
@@ -35,6 +36,8 @@ def launch_dashboard(
     ----------
     runs_dir:
         Root directory that contains the ``runs/`` sub-directory.
+    host:
+        Local host address for the Gradio server (default: "127.0.0.1").
     port:
         Local port for the Gradio server (default: 7860).
     share:
@@ -46,6 +49,7 @@ def launch_dashboard(
 
     launch(
         runs_dir=runs_dir,
+        host=host,
         port=port,
         share=share,
         open_browser=open_browser,

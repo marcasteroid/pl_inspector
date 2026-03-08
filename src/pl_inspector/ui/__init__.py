@@ -29,6 +29,6 @@ Architecture
 
 from __future__ import annotations
 
-from .app import build_app, launch
+from .app import build_app, launch, main
 
-__all__ = ["build_app", "launch"]
+__all__ = ["build_app", "launch", "main"]
